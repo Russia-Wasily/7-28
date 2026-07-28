@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Analyzer - Client Side</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        /* Same styles as before */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        .upload-section {
+            text-align: center;
+            padding: 40px;
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            background: #f8f9ff;
+        }
+        .file-input { display: none; }
+        .upload-btn {
+            background: #667eea;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .upload-btn:hover { background: #764ba2; }
+        .results { display: none; }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .section h2 { color: #667eea; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th { background: #667eea; color: white; padding: 12px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #e0e0e0; }
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 CSV Data Analyzer (Browser-Based)</h1>
+        
+        <div class="upload-section">
+            <h2>Upload Your CSV File</h2>
+            <input type="file" id="fileInput" class="file-input" accept=".csv">
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                Choose CSV File
+            </button>
+            <p id="fileName" style="margin-top: 10px;">No file chosen</p>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="section">
+                <h2>Data Preview</h2>
+                <div style="overflow-x: auto;" id="previewTable"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Statistics</h2>
+                <div id="statistics"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Charts</h2>
+                <div id="charts"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('fileName').textContent = file.name;
+            
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    analyzeData(results.data, results.meta.fields);
+                },
+                error: function(error) {
+                    alert('Error parsing CSV: ' + error.message);
+                }
+            });
+        });
+
+        function analyzeData(data, columns) {
+            document.getElementById('results').style.display = 'block';
+            
+            // Filter out empty rows
+            data = data.filter(row => Object.values(row).some(v => v !== null && v !== ''));
+            
+            // Preview table
+            displayPreview(data.slice(0, 10));
+            
+            // Statistics
+            displayStatistics(data, columns);
+            
+            // Charts
+            displayCharts(data, columns);
+        }
+
+        function displayPreview(data) {
+            if (data.length === 0) {
+                document.getElementById('previewTable').innerHTML = '<p>No data found</p>';
+                return;
+            }
+            
+            const columns = Object.keys(data[0]);
+            let html = '<table><thead><tr>';
+            columns.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => html += `<td>${row[col] ?? 'N/A'}</td>`);
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('previewTable').innerHTML = html;
+        }
+
+        function displayStatistics(data, columns) {
+            let html = `<p><strong>Total Rows:</strong> ${data.length}</p>`;
+            html += `<p><strong>Total Columns:</strong> ${columns.length}</p>`;
+            
+            // Numerical columns statistics
+            const numericalCols = columns.filter(col => {
+                return data.some(row => typeof row[col] === 'number');
+            });
+            
+            if (numericalCols.length > 0) {
+                html += '<h3>Numerical Statistics</h3><table><thead><tr><th>Column</th><th>Mean</th><th>Min</th><th>Max</th></tr></thead><tbody>';
+                
+                numericalCols.forEach(col => {
+                    const values = data.map(row => row[col]).filter(v => typeof v === 'number');
+                    if (values.length > 0) {
+                        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+                        const min = Math.min(...values);
+                        const max = Math.max(...values);
+                        html += `<tr><td>${col}</td><td>${mean.toFixed(2)}</td><td>${min}</td><td>${max}</td></tr>`;
+                    }
+                });
+                
+                html += '</tbody></table>';
+            }
+            
+            document.getElementById('statistics').innerHTML = html;
+        }
+
+        function displayCharts(data, columns) {
+            const chartsDiv = document.getElementById('charts');
+            chartsDiv.innerHTML = '';
+            
+            const numericalCols = columns.filter(col => {
+                return data.some(row => typeof row[col] === 'number');
+            });
+            
+            // Create histogram for first numerical column
+            if (numericalCols.length > 0) {
+                const col = numericalCols[0];
+                const values = data.map(row => row[col]).filter(v => typeof v === 'number');
+                
+                if (values.length > 0) {
+                    chartsDiv.innerHTML += `
+                        <div class="chart-container">
+                            <h3>Distribution of ${col}</h3>
+                            <canvas id="histogram"></canvas>
+                        </div>
+                    `;
+                    
+                    setTimeout(() => {
+                        const ctx = document.getElementById('histogram').getContext('2d');
+                        const bins = 10;
+                        const min = Math.min(...values);
+                        const max = Math.max(...values);
+                        const binWidth = (max - min) / bins;
+                        const frequencies = new Array(bins).fill(0);
+                        
+                        values.forEach(v => {
+                            let index = Math.floor((v - min) / binWidth);
+                            if (index === bins) index = bins - 1;
+                            frequencies[index]++;
+                        });
+                        
+                        const labels = Array.from({length: bins}, (_, i) => 
+                            (min + i * binWidth).toFixed(2)
+                        );
+                        
+                        new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: col,
+                                    data: frequencies,
+                                    backgroundColor: 'rgba(102, 126, 234, 0.6)'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: { y: { beginAtZero: true } }
+                            }
+                        });
+                    }, 100);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
